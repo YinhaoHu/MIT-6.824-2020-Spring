@@ -109,6 +109,23 @@ func TestBasicAgree2B(t *testing.T) {
 	cfg.end()
 }
 
+// ======================================= < Lab 2B Test Case Set > ===============================
+
+/**
+===============================================================================
+							Lab 2B test case set
+===============================================================================
+   #		CASE						   STATUS 			DATE			NOTE
+-> 1 TestBasicAgree2B					    PASS			6th,Dec.
+-> 2 TestRPCBytes2B							PASS			6th,Dec.
+-> 3 TestFailAgree2B						PASS			7th,Dec.
+-> 4 TestFailNoAgree2B						PASS			8th,Dec.
+-> 5 TestConcurrentStarts2B					PASS			8th,Dec.
+-> 6 TestRejoin2B							PASS			9th,Dec.
+-> 7 TestBackup2B							PASS			9th,Dec.
+-> 8 TestCount2B							PASS			9th,Dec.
+*/
+
 //
 // check, based on counting bytes of RPCs, that
 // each command is sent to each peer just once.
@@ -550,6 +567,23 @@ loop:
 	cfg.end()
 }
 
+// ======================================= < Lab 2C Test Case Set > ===============================
+
+/**
+===============================================================================
+							Lab 2C test case set (start on 12,Dec.)
+===============================================================================
+   #		CASE						   STATUS 			DATE			NOTE
+-> 1 TestPersist12C							PASS			14,Dec.
+-> 2 TestPersist22C							PASS			14,Dec.
+-> 3 TestPersist32C							PASS			14,Dec.
+-> 4 TestFigure82C							PASS			14,Dec.
+-> 5 TestUnreliableAgree2C					PASS			14,Dec.
+-> 6 TestFigure8Unreliable2C				FAIL							Stopped since 15th, come back on 19th.
+-> 7 TestReliableChurn2C					PASS			14,Dec.
+-> 8 TestUnreliableChurn2C					PASS			14,Dec.
+*/
+
 func TestPersist12C(t *testing.T) {
 	servers := 3
 	cfg := make_config(t, servers, false)
@@ -774,6 +808,7 @@ func TestFigure8Unreliable2C(t *testing.T) {
 
 	cfg.begin("Test (2C): Figure 8 (unreliable)")
 
+	PrintCheckPoint("<--- Checkpoint : First check --->")
 	cfg.one(rand.Int()%10000, 1, true)
 
 	nup := servers
@@ -817,6 +852,7 @@ func TestFigure8Unreliable2C(t *testing.T) {
 		}
 	}
 
+	PrintCheckPoint("<--- Checkpoint : Last check --->")
 	cfg.one(rand.Int()%10000, servers, true)
 
 	cfg.end()

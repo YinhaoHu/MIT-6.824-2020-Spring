@@ -1,35 +1,43 @@
 package mr
 
-//
-// RPC definitions.
-//
-// remember to capitalize all names.
-//
+import (
+	"os"
+	"strconv"
+)
 
-import "os"
-import "strconv"
+type TaskStatus int
 
-//
-// example to show how to declare the arguments
-// and reply for an RPC.
-//
+const (
+	Pending TaskStatus = iota
+	Executing
+	Done
+)
 
-type ExampleArgs struct {
-	X int
+type TaskType int
+
+const (
+	MapTask TaskType = iota
+	ReduceTask
+)
+
+type Task struct {
+	Input   string
+	Type    TaskType // "map" or "reduce"
+	ID      int
+	NReduce int
+	Fetched bool // if false, the worker needs to wait for a while.
 }
 
-type ExampleReply struct {
-	Y int
-}
+// Arg is used to be a placeholder in the rpc call only.
+type Arg struct{}
 
 // Add your RPC definitions here.
 
-
 // Cook up a unique-ish UNIX-domain socket name
-// in /var/tmp, for the master.
+// in /var/tmp, for the coordinator.
 // Can't use the current directory since
 // Athena AFS doesn't support UNIX-domain sockets.
-func masterSock() string {
+func coordinatorSock() string {
 	s := "/var/tmp/824-mr-"
 	s += strconv.Itoa(os.Getuid())
 	return s
