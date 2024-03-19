@@ -5,7 +5,8 @@
 
 Everything in learning MIT 6.824 2020 Spring and doing all of the labs.
 
-Current status: Lab 1,2,3 are done.
+Current status: Lab 1,2,3,4 are implemented and passed.
 
-Future: Lab 4. Interview questions collection and
-learning notes.
+Future: 
+- Interview questions collection and learning notes.
+- Introduction to lab3 and lab4 implementation.
