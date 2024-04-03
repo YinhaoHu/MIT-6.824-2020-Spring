@@ -5,7 +5,6 @@ import (
 	"6.824/labrpc"
 	"6.824/util"
 	"bytes"
-	"fmt"
 	"log"
 	"math/rand"
 	"runtime"
@@ -488,9 +487,8 @@ func (rf *Raft) hasConflict(beginPhysicalIndex int, entries *[]LogEntry) (bool, 
 	end := util.MinInt(beginPhysicalIndex+len(*entries), len(rf.Log))
 	entryIndex := 0
 	for index := beginPhysicalIndex; index < end; index++ {
-		lhs := fmt.Sprintf("%v", (*entries)[entryIndex])
-		rhs := fmt.Sprintf("%v", rf.Log[index])
-		if lhs != rhs {
+		// TODO(Hoo) : this is the current updating code block.
+		if rf.Log[index].Term != (*entries)[entryIndex].Term {
 			return true, entryIndex
 		}
 		entryIndex++
