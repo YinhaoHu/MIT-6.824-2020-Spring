@@ -6,3 +6,4 @@ src/kvraft/log/**
 src/raft/log/**
 .idea
 src/main/mr-tmp/**
+/src/raft/log/

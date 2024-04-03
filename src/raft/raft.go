@@ -1,22 +1,5 @@
 package raft
 
-//
-// this is an outline of the API that raft must expose to
-// the service (or tester). see comments below for
-// each of these functions for more details.
-//
-// rf = Make(...)
-//   create a new Raft server.
-// rf.Start(command interface{}) (index, term, isleader)
-//   start agreement on a new Log entry
-// rf.GetState() (term, isLeader)
-//   ask a Raft for its current term, and whether it thinks it is leader
-// ApplyMsg
-//   each time a new entry is committed to the Log, each Raft peer
-//   should send an ApplyMsg to the service (or tester)
-//   in the same server.
-//
-
 import (
 	"6.824/labgob"
 	"6.824/labrpc"
@@ -103,14 +86,11 @@ type Raft struct {
 	dead      int32               // set by Kill()
 	leaderID  int                 // For client to redirect quickly
 
-	// Your data here (2A, 2B, 2C).
-	// Look at the paper's Figure 2 for a description of what
-	// state a Raft server must maintain.
-
 	// Persistent states on all servers (Updated on stable Storage before responding to RPCs)
 	CurrentTerm int
 	VotedFor    int
 	Log         []LogEntry // Valid index starts with 1, Log[0] is invalid and should be initialized!
+
 	// Volatile state on all servers:
 	commitIndex int // Logical Index
 	lastApplied int // Logical Index
@@ -127,6 +107,7 @@ type Raft struct {
 
 	applyChannel       chan ApplyMsg
 	startNotifications []chan int
+
 	//Leader status which tracks number of replications on the servers.
 	//Access with physical index.
 	replicaCount      [][]int
@@ -723,7 +704,7 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 }
 
 // ticker is a goroutine which starts a new election if this peer hasn't received
-// heartsbeats recently.
+// heartbeats recently.
 func (rf *Raft) ticker() {
 	for rf.killed() == false {
 		time.Sleep(rf.electionTimeout)
@@ -749,7 +730,7 @@ func (rf *Raft) generateVote() int {
 			voteFor++
 		}
 	}
-	return 1
+	return voteFor
 }
 
 // convertToCandidate converts the follower to candidate state and start election.
@@ -838,35 +819,11 @@ func (rf *Raft) convertToCandidate() {
 	return
 }
 
-// convertToLeader converts the candidate peer to leader state.
-func (rf *Raft) convertToLeader() {
-	lockID := rf.lock()
-	atomic.StoreInt32((*int32)(unsafe.Pointer(&rf.state)), int32(LeaderState))
-	nPeers := len(rf.peers)
-	for peer := 0; peer < nPeers; peer++ {
-		rf.nextIndex[peer] = rf.logicalIndex(len(rf.Log))
-		rf.matchIndex[peer] = 0
-		rf.replicaCount = make([][]int, len(rf.Log))
-		for i := 0; i < rf.physicalIndex(rf.commitIndex+1); i++ {
-			rf.replicaCount[i] = make([]int, nPeers)
-		}
-		for i := rf.physicalIndex(rf.commitIndex + 1); i < len(rf.replicaCount); i++ {
-			rf.replicaCount[i] = make([]int, nPeers)
-			rf.replicaCount[i][rf.me] = 1
-		}
-	}
-	util.RaftDebugLog("server %v becomes leader in term %v with Log(LLL=%v,LPL=%v) %v and commit index %v", rf.me,
-		rf.CurrentTerm, rf.logicalIndex(len(rf.Log)),
-		len(rf.Log), rf.Log,
-		rf.commitIndex)
-	rf.snapshotArg.LeaderID = rf.me
-	rf.snapshotArg.Term = rf.CurrentTerm
-	rf.broadCastSnapshot()
-	rf.unlock(lockID)
+func (rf *Raft) runAsLeader() {
 	done := int32(0)
 	// Send initial heart beat message upon election is done immediate and later
 	// send the heart beat message periodically.
-	for server := 0; server < nPeers; server++ {
+	for server := 0; server < len(rf.peers); server++ {
 		if server != rf.me {
 			go func(server int) {
 				for !rf.killed() && atomic.LoadInt32(&done) == 0 {
@@ -970,6 +927,36 @@ func (rf *Raft) convertToLeader() {
 			}(server)
 		}
 	}
+}
+
+// convertToLeader converts the candidate peer to leader state.
+func (rf *Raft) convertToLeader() {
+	lockID := rf.lock()
+	atomic.StoreInt32((*int32)(unsafe.Pointer(&rf.state)), int32(LeaderState))
+	nPeers := len(rf.peers)
+	// Set the initial replicaCount, matchIndex, nextIndex for AppendEntries and Apply.
+	for peer := 0; peer < nPeers; peer++ {
+		rf.nextIndex[peer] = rf.logicalIndex(len(rf.Log))
+		rf.matchIndex[peer] = 0
+		rf.replicaCount = make([][]int, len(rf.Log))
+		for i := 0; i < rf.physicalIndex(rf.commitIndex+1); i++ {
+			rf.replicaCount[i] = make([]int, nPeers)
+		}
+		for i := rf.physicalIndex(rf.commitIndex + 1); i < len(rf.replicaCount); i++ {
+			rf.replicaCount[i] = make([]int, nPeers)
+			rf.replicaCount[i][rf.me] = 1
+		}
+	}
+	util.RaftDebugLog("server %v becomes leader in term %v with Log(LLL=%v,LPL=%v) %v and commit index %v", rf.me,
+		rf.CurrentTerm, rf.logicalIndex(len(rf.Log)),
+		len(rf.Log), rf.Log,
+		rf.commitIndex)
+	// Sync the snapshot.
+	rf.snapshotArg.LeaderID = rf.me
+	rf.snapshotArg.Term = rf.CurrentTerm
+	rf.broadCastSnapshot()
+	rf.unlock(lockID)
+	rf.runAsLeader()
 }
 
 // commitRangeCheck checks that if all Log entries whose index is in the range [commitIndex+1,toCommitIndex]
