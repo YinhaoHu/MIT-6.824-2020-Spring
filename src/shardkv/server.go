@@ -106,7 +106,9 @@ type ShardKV struct {
 	runningGoroutineCond     sync.Cond
 	runningGoroutineChannels map[int64]chan int
 	state                    int32
-	rpcReply                 map[int64]any
+	// rpcReply is used to solve the leader crash problem in the last challenge.
+	// That challenge violated the assumption of 2PC and hench this field is needed.
+	rpcReply map[int64]any
 }
 
 const (
@@ -288,6 +290,8 @@ func (kv *ShardKV) generateProcessingDoneChannelName(clientID int32, timestamp i
 	return fmt.Sprintf("%v %v", clientID, timestamp)
 }
 
+// notifyProcessingDone tells the invoker of the kv operation from server RPCs for client requests that the
+// operations are done.
 func (kv *ShardKV) notifyProcessingDone(clientID int32, timestamp int64, reply any) {
 	which := fmt.Sprintf("%v %v", clientID, timestamp)
 	lockID := kv.lock(&kv.processorChannelMapMutex)
@@ -1046,6 +1050,7 @@ func (kv *ShardKV) executeShiftShards(diff *ConfigDifference, receivedConfig *sh
 				arg.Type = "All"
 				arg.Shards = diff.ShardsToGroups[dest]
 			}
+
 			// The dest gid group information might be changed. But we still want to get the shards from them.
 			servers := make([]string, 0)
 			if receivedConfig.HasGroup(dest) {
@@ -1053,6 +1058,7 @@ func (kv *ShardKV) executeShiftShards(diff *ConfigDifference, receivedConfig *sh
 			} else {
 				servers = slices.Clone(kv.config.Groups[dest])
 			}
+
 			// Asynchronously send ShiftShardsRPCs for each server in the group.
 			go func(arg ShiftShardsRPCArg, servers []string, gid int) {
 				// If abort signal comes, notify the looping goroutine.
