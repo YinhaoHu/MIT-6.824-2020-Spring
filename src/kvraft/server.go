@@ -123,7 +123,6 @@ func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 func (kv *KVServer) Kill() {
 	atomic.StoreInt32(&kv.dead, 1)
 	kv.rf.Kill()
-	// TODO(Hoo): Implement me if desired.
 	kv.cond.Broadcast()
 }
 
