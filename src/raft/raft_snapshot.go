@@ -28,48 +28,6 @@ type InstallSnapshotReply struct {
 	Term int //currentTerm, for leader to update itself
 }
 
-// broadcasts the snapshot to all followers. Thread safety should be guaranteed by caller.
-func (rf *Raft) broadCastSnapshot() {
-	if rf.snapshotDisabled {
-		return
-	}
-	args := InstallSnapshotArgs{
-		Term:              rf.snapshotArg.Term,
-		LeaderID:          rf.snapshotArg.LeaderID,
-		LastIncludedIndex: rf.snapshotArg.LastIncludedIndex,
-		LastIncludedTerm:  rf.snapshotArg.LastIncludedTerm,
-		Data:              rf.snapshot.Data,
-	}
-	for i := 0; i < len(rf.peers); i++ {
-		if rf.me != i {
-			go func(server int) {
-				for !rf.killed() {
-					var reply InstallSnapshotReply
-					ok := rf.peers[server].Call("Raft.InstallSnapshot", &args, &reply)
-					util.RaftDebugLog("Leader %v received %+v for message in broadcastSnapshot.", rf.me, reply)
-					if ok {
-						lockID := rf.lock()
-						if args.Term > rf.CurrentTerm && rf.state == LeaderState {
-							rf.convertToFollower()
-							rf.persist()
-							util.RaftDebugLog("leader %v convert to follower", rf.me)
-						} else if rf.nextIndex[server] < args.LastIncludedIndex {
-							rf.nextIndex[server] = args.LastIncludedIndex + 1
-							rf.matchIndex[server] = args.LastIncludedIndex
-						}
-						if rf.snapshotPoint[server] < args.LastIncludedIndex {
-							rf.snapshotPoint[server] = args.LastIncludedIndex
-						}
-						util.RaftDebugLog("Leader %v updated rf.snapshotPoint[%v]=%v", rf.me, server, args.LastIncludedIndex)
-						rf.unlock(lockID)
-						break
-					}
-				}
-			}(i)
-		}
-	}
-}
-
 func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapshotReply) {
 	if rf.snapshotDisabled {
 		return
@@ -128,6 +86,48 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	rf.unlock(lockID)
 }
 
+// broadcasts the snapshot to all followers. Thread safety should be guaranteed by caller.
+func (rf *Raft) broadCastSnapshot() {
+	if rf.snapshotDisabled {
+		return
+	}
+	args := InstallSnapshotArgs{
+		Term:              rf.snapshotArg.Term,
+		LeaderID:          rf.snapshotArg.LeaderID,
+		LastIncludedIndex: rf.snapshotArg.LastIncludedIndex,
+		LastIncludedTerm:  rf.snapshotArg.LastIncludedTerm,
+		Data:              rf.snapshot.Data,
+	}
+	for i := 0; i < len(rf.peers); i++ {
+		if rf.me != i {
+			go func(server int) {
+				for !rf.killed() {
+					var reply InstallSnapshotReply
+					ok := rf.peers[server].Call("Raft.InstallSnapshot", &args, &reply)
+					util.RaftDebugLog("Leader %v received %+v for message in broadcastSnapshot.", rf.me, reply)
+					if ok {
+						lockID := rf.lock()
+						if args.Term > rf.CurrentTerm && rf.state == LeaderState {
+							rf.convertToFollower()
+							rf.persist()
+							util.RaftDebugLog("leader %v convert to follower", rf.me)
+						} else if rf.nextIndex[server] < args.LastIncludedIndex {
+							rf.nextIndex[server] = args.LastIncludedIndex + 1
+							rf.matchIndex[server] = args.LastIncludedIndex
+						}
+						if rf.snapshotPoint[server] < args.LastIncludedIndex {
+							rf.snapshotPoint[server] = args.LastIncludedIndex
+						}
+						util.RaftDebugLog("Leader %v updated rf.snapshotPoint[%v]=%v", rf.me, server, args.LastIncludedIndex)
+						rf.unlock(lockID)
+						break
+					}
+				}
+			}(i)
+		}
+	}
+}
+
 // MakeSnapshot makes snapshot when server needs.
 func (rf *Raft) makeSnapshot(snapshot *Snapshot) bool {
 	util.RaftDebugLog("Raft.makeSnapshot: server %v try to make snapshot", rf.me)
@@ -165,6 +165,7 @@ func (rf *Raft) GetSnapshot() (SnapshotData, bool) {
 	return rf.snapshot.Data, true
 }
 
+// readSnapshot reads snapshot from persist storage.
 func (rf *Raft) readSnapshot() {
 	buffer := bytes.NewBuffer(rf.persister.ReadSnapshot())
 	decoder := labgob.NewDecoder(buffer)
@@ -184,6 +185,7 @@ func (rf *Raft) readSnapshot() {
 	util.KVRaftDebugLog("server %v reported snapshot. Snapshot:%v", rf.me, rf.snapshot)
 }
 
+// InitializeSnapshot enables the snapshot to be made.
 func (rf *Raft) InitializeSnapshot(workCh chan Snapshot, doneCh chan int) {
 	rf.snapshotDisabled = false
 	rf.snapshotChannel = workCh

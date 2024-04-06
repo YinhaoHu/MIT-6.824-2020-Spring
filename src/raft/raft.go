@@ -46,74 +46,6 @@ const (
 	LeaderState
 )
 
-func (rf *Raft) generateRandomizedElectionTime() time.Duration {
-	msCount := ElectionTimeMin.Milliseconds() + rand.Int63n(ElectionTimeMax.Milliseconds()-ElectionTimeMin.Milliseconds())
-	result := time.Duration(msCount) * time.Millisecond
-	return result
-}
-
-// Raft
-// A Go object implementing a single Raft peer.
-type Raft struct {
-	mu        sync.Mutex          // Lock to protect shared access to this peer's state
-	peers     []*labrpc.ClientEnd // RPC end points of all peers
-	persister *Persister          // Object to hold this peer's persisted state
-	me        int                 // this peer's index into peers[]
-	dead      int32               // set by Kill()
-	leaderID  int                 // For client to redirect quickly
-
-	// Persistent states on all servers (Updated on stable Storage before responding to RPCs)
-	CurrentTerm int
-	VotedFor    int
-	Log         []LogEntry // Valid index starts with 1, Log[0] is invalid and should be initialized!
-
-	// Volatile state on all servers:
-	commitIndex int // Logical Index
-	lastApplied int // Logical Index
-
-	// Volatile state on leaders: (Reinitialized after election)
-	nextIndex        []int // Logical Index
-	matchIndex       []int // Logical Index
-	snapshotPoint    []int // Logic indices of the lastIncludedIndex for each peer.
-	snapshotArg      InstallSnapshotArgs
-	snapshotChannel  chan Snapshot
-	snapshot         Snapshot
-	snapshotDoneCh   chan int // Notify the upper layer that the snapshot is done and broadcast-ed.
-	snapshotDisabled bool     // Upper layer disabled the snapshot or not.
-
-	applyChannel       chan ApplyMsg
-	startNotifications []chan int
-
-	//Leader status which tracks number of replications on the servers.
-	//Access with physical index.
-	replicaCount      [][]int
-	state             peerState
-	electionTimeout   time.Duration
-	lastHeartBeatTime time.Time
-	lastVoteTime      time.Time
-}
-
-// Kill
-// the tester doesn't halt goroutines created by Raft after each test,
-// but it does call the Kill() method. your code can use killed() to
-// check whether Kill() has been called. the use of atomic avoids the
-// need for a lock.
-//
-// the issue is that long-running goroutines use memory and may chew
-// up CPU time, perhaps causing later tests to fail and generating
-// confusing debug output. any goroutine with a long-running loop
-// should call killed() to check whether it should stop.
-func (rf *Raft) Kill() {
-	atomic.StoreInt32(&rf.dead, 1)
-	// Your code here, if desired.
-	util.RaftDebugLog("server %v is killed", rf.me)
-}
-
-func (rf *Raft) killed() bool {
-	z := atomic.LoadInt32(&rf.dead)
-	return z == 1
-}
-
 type AppendEntriesArgs struct {
 	Term          int
 	LeaderID      int
@@ -377,6 +309,68 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *Reques
 	return ok
 }
 
+// Raft
+// A Go object implementing a single Raft peer.
+type Raft struct {
+	mu        sync.Mutex          // Lock to protect shared access to this peer's state
+	peers     []*labrpc.ClientEnd // RPC end points of all peers
+	persister *Persister          // Object to hold this peer's persisted state
+	me        int                 // this peer's index into peers[]
+	dead      int32               // set by Kill()
+	leaderID  int                 // For client to redirect quickly
+
+	// Persistent states on all servers (Updated on stable Storage before responding to RPCs)
+	CurrentTerm int
+	VotedFor    int
+	Log         []LogEntry // Valid index starts with 1, Log[0] is invalid and should be initialized!
+
+	// Volatile state on all servers:
+	commitIndex int // Logical Index
+	lastApplied int // Logical Index
+
+	// Volatile state on leaders: (Reinitialized after election)
+	nextIndex        []int // Logical Index
+	matchIndex       []int // Logical Index
+	snapshotPoint    []int // Logic indices of the lastIncludedIndex for each peer.
+	snapshotArg      InstallSnapshotArgs
+	snapshotChannel  chan Snapshot
+	snapshot         Snapshot
+	snapshotDoneCh   chan int // Notify the upper layer that the snapshot is done and broadcast-ed.
+	snapshotDisabled bool     // Upper layer disabled the snapshot or not.
+
+	applyChannel       chan ApplyMsg
+	startNotifications []chan int
+
+	//Leader status which tracks number of replications on the servers.
+	//Access with physical index.
+	replicaCount      [][]int
+	state             peerState
+	electionTimeout   time.Duration
+	lastHeartBeatTime time.Time
+	lastVoteTime      time.Time
+}
+
+// Kill
+// the tester doesn't halt goroutines created by Raft after each test,
+// but it does call the Kill() method. your code can use killed() to
+// check whether Kill() has been called. the use of atomic avoids the
+// need for a lock.
+//
+// the issue is that long-running goroutines use memory and may chew
+// up CPU time, perhaps causing later tests to fail and generating
+// confusing debug output. any goroutine with a long-running loop
+// should call killed() to check whether it should stop.
+func (rf *Raft) Kill() {
+	atomic.StoreInt32(&rf.dead, 1)
+	// Your code here, if desired.
+	util.RaftDebugLog("server %v is killed", rf.me)
+}
+
+func (rf *Raft) killed() bool {
+	z := atomic.LoadInt32(&rf.dead)
+	return z == 1
+}
+
 // generateVote generates a vote which is guaranteed to be other peer with the assumption
 // that the total servers in the raft cluster are more than one.
 func (rf *Raft) generateVote() int {
@@ -623,22 +617,6 @@ func (rf *Raft) convertToFollower() {
 	atomic.StoreInt32((*int32)(unsafe.Pointer(&rf.state)), int32(FollowerState))
 }
 
-// ticker is a goroutine which starts a new election if this peer hasn't received
-// heartbeats recently.
-func (rf *Raft) ticker() {
-	for rf.killed() == false {
-		time.Sleep(rf.electionTimeout)
-		lockID := rf.lock()
-		currentTime := time.Now()
-		if ((currentTime.Sub(rf.lastHeartBeatTime)) > rf.electionTimeout &&
-			(currentTime.Sub(rf.lastVoteTime)) > rf.electionTimeout) && rf.state != LeaderState {
-			rf.electionTimeout = rf.generateRandomizedElectionTime()
-			go rf.convertToCandidate()
-		}
-		rf.unlock(lockID)
-	}
-}
-
 // commitRangeCheck checks that if all Log entries whose index is in the range [commitIndex+1,toCommitIndex]
 // can be committed. Return true if so. Otherwise, false.
 func (rf *Raft) commitRangeCheck(toCommitPhysicalIndex int) bool {
@@ -740,6 +718,28 @@ func (rf *Raft) GetState() (int, bool) {
 
 func (rf *Raft) IsLeader() bool {
 	return atomic.LoadInt32((*int32)(unsafe.Pointer(&rf.state))) == int32(LeaderState)
+}
+
+func (rf *Raft) generateRandomizedElectionTime() time.Duration {
+	msCount := ElectionTimeMin.Milliseconds() + rand.Int63n(ElectionTimeMax.Milliseconds()-ElectionTimeMin.Milliseconds())
+	result := time.Duration(msCount) * time.Millisecond
+	return result
+}
+
+// ticker is a goroutine which starts a new election if this peer hasn't received
+// heartbeats recently.
+func (rf *Raft) ticker() {
+	for rf.killed() == false {
+		time.Sleep(rf.electionTimeout)
+		lockID := rf.lock()
+		currentTime := time.Now()
+		if ((currentTime.Sub(rf.lastHeartBeatTime)) > rf.electionTimeout &&
+			(currentTime.Sub(rf.lastVoteTime)) > rf.electionTimeout) && rf.state != LeaderState {
+			rf.electionTimeout = rf.generateRandomizedElectionTime()
+			go rf.convertToCandidate()
+		}
+		rf.unlock(lockID)
+	}
 }
 
 // Make returns a new Raft instance.
