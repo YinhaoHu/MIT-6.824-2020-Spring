@@ -1,0 +1,9 @@
+# Questions in reading this paper.
+---
+Q1: [3.2] How does the second alternative improve the potential parallel system recovery exactly?
+
+Q2: [3.3] How does the CRAQ allowing piplined writes improve the write throughput?
+
+Q3: An example to use multiple chains? How is the piplining expressed?
+
+

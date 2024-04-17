@@ -1,0 +1,8 @@
+ # Question assigned for reaeding
+---
+Q: One use of Zookeeper is as a fault-tolerant lock service (see the section "Simple locks" on page 6). Why isn't possible for two clients to acquire the same lock? In particular, how does Zookeeper decide if a client has failed and it can give the client's locks to other clients?
+
+A: The client which tries to acquire a lock invoke `create` to the znode related to the specific lock. If the znode exists, failure will be returned and this is the way the ZooKeeper decides a client has failed in acquiring lock. Every client failed to acquire the lock by invoking `create` will set a watch on the znode and the notification signaled after the acquired client release the lock will let the client acquire the lock successfully.
+
+
+ 

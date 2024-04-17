@@ -1,0 +1,11 @@
+Questions:
+
+1. How to learn from reading paper more efficiently in the future? I currently spend seemingly much time reading it because I do not know what are the key points should I obtain from reading the paper.
+
+2. How to do a self-check which makes me know the state of my learning ?
+
+3. Is the OCC here briefly said to be that read a data object with lock-free but just one version?
+
+Feeling:
+
+I think the next reading should be changed to read a paper a day and DO NOT read the next section until the current section is understood mostly.

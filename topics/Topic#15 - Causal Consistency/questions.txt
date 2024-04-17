@@ -1,0 +1,30 @@
+Reading Targets:
+After reading this paper, I should probably be able to answer these questions:
+
+- What is causal consistency and compare it with eventual consistency. With example best.
+
+- What is ALPS system? Understand the four important properties of that.
+
+- How was the COP built with causal consistency.
+
+- What are its performance and industry use case.
+
+Questions in reading:
+
+1. What is causal dependency mentioned in Abstract?
+A: Causal dependency is equivalent to the potential causality concept. It is defined in three rules:
+single thread execution, read after write the same data object, transitive.
+
+2. What is eventual consistency? Explain with an example.
+A: Eventual consistency is a consistency model which guarantees that an update to an data object will
+be read after a period of time when there is no more update to that data object. Consider an example,
+two datacenters DC1 and DC2. Client A in DC1 sent put(K,1) to DC1 in time 101, Client B sent request get(K) to
+DC2 in time 102 might not get K=1 result even if there is no update to K since time 101 and got the stale data. But
+in time 107, it sent request get(K), it might get the K=1 result.
+
+3. In what case the first problem of conflicting can happen?
+A: Think 3 datacenters, Client A sent put(K,1) to DC1 and client B sent put(K,2) to DC2 in the almost same time. The result
+might be DC1: K=2, DC2:K=1.
+
+4. The older one in real time would be returned if the client sent get_by_ver to a little slow replica?
+A: Yes. Network latency can cause that and it is allowed in the causal consistency which does not guarantee real time order.
